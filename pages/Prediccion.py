@@ -70,19 +70,40 @@ with st.form("prediction_form"):
 
 if submit_button:
     try:
+        # Codificar los valores categóricos
+        gender_encoded = gender_enc.transform_scalar(gender)
+        client_encoded = cust_enc.transform_scalar(client)
+        travel_encoded = travel_enc.transform_scalar(travel)
+        class_encoded = class_enc.transform_scalar(class_travel)
+        satisfaction_encoded = satisfaction_enc.transform_scalar(satisfaction)
+
+        # Crear diccionario con las características en el ORDEN EXACTO del modelo
         input_dict = {
-            "gender": [gender],
-            "client": [client],
-            "travel": [travel],
-            "class_travel": [class_travel],
-            "satisfaction": [satisfaction],
+            "Gender_label": [gender_encoded],
+            "Customer_Type_label": [client_encoded],
+            "Type_of_Travel_label": [travel_encoded],
+            "Class_label": [class_encoded],
+            "Age": [0],
+            "Flight Distance": [0],
+            "Inflight wifi service": [0],
+            "Departure/Arrival time convenient": [0],
+            "Ease of Online booking": [0],
+            "Gate location": [0],
+            "Food and drink": [0],
+            "Online boarding": [0],
+            "Seat comfort": [0],
+            "Inflight entertainment": [0],
+            "On-board service": [0],
+            "Leg room service": [0],
+            "Baggage handling": [0],
+            "Checkin service": [0],
+            "Inflight service": [0],
+            "Cleanliness": [0],
+            "Departure Delay in Minutes": [0],
+            "Arrival Delay in Minutes": [0],
         }
 
-        # Asegurar orden de columnas que usó el entrenamiento
-        columns_order = [
-            "gender", "client", "travel", "class_travel", "satisfaction",
-        ]
-        input_data = pd.DataFrame(input_dict)[columns_order]
+        input_data = pd.DataFrame(input_dict)
 
         prediccion = pipeline.predict(input_data)
         prediccion_final = post.round_post(prediccion)[0]
@@ -93,9 +114,8 @@ if submit_button:
             st.write(f"**Genero:** {gender}")
             st.write(f"**Tipo de cliente:** {client}")
             st.write(f"**Tipo de viaje:** {travel}")
-            st.write(f"**tipo de clase:** {class_travel}")
-            st.write(f"**Tipo de satisfaccion:** {satisfaction}")
-            st.write(f"**Precio sin redondear:** ${prediccion[0]:,.2f}")
+            st.write(f"**Tipo de clase:** {class_travel}")
+            st.write(f"**Satisfaccion:** {satisfaction}")
 
     except Exception as e:
         st.error(f"Error al hacer la predicción: {e}")
