@@ -1,196 +1,155 @@
 import os
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import altair as alt
+import numpy as np
 
 # =========================
 # CONFIG
 # =========================
-st.set_page_config(page_title="Car Price Dashboard", layout="wide")
+st.set_page_config(page_title="Dashboard de Satisfacción", layout="wide")
+st.title("📈 Dashboard — Satisfacción de Pasajeros")
 
-DATA_PATH = "data"
+# Posibles datasets (prioriza data/clean_data.csv)
+DATA_OPTIONS = []
+if os.path.exists("data/clean_data.csv"):
+    DATA_OPTIONS.append("data/clean_data.csv")
+if os.path.exists("airline_passenger_satisfaction.csv"):
+    DATA_OPTIONS.append("airline_passenger_satisfaction.csv")
 
-PRICE_COL = "price"
-YEAR_COL = "model_year"
-EXT_COL = "ext_col"
-INT_COL = "int_col"
-TRANS_COL = "transmission"
-BRAND_COL = "brand"
+if not DATA_OPTIONS:
+    st.error("❌ No hay datasets disponibles. Añade `data/clean_data.csv` o `airline_passenger_satisfaction.csv`.")
+    st.stop()
 
-# =========================
-# LOAD DATA
-# =========================
+st.sidebar.title("📦 Dataset")
+selected_file = st.sidebar.selectbox("Selecciona el dataset", DATA_OPTIONS)
+
 @st.cache_data
 def load_data(path):
     return pd.read_csv(path)
 
-files = [f for f in os.listdir(DATA_PATH) if f.endswith(".csv")]
-if not files:
-    st.error("❌ No hay archivos CSV en la carpeta /data")
+df = load_data(selected_file)
+
+# Normalizar nombre de la columna de satisfacción
+if "satisfaction" not in df.columns:
+    st.error("El dataset no contiene la columna 'satisfaction'.")
     st.stop()
 
-st.sidebar.title("📦 Dataset")
-selected_file = st.sidebar.selectbox("Selecciona el dataset", files)
-df = load_data(os.path.join(DATA_PATH, selected_file))
+# Crear columna booleana para satisfacción
+df["is_satisfied"] = df["satisfaction"].str.lower() == "satisfied"
 
 # =========================
-# BASIC CLEANING
+# SIDEBAR — FILTROS
 # =========================
-df[PRICE_COL] = pd.to_numeric(df[PRICE_COL], errors="coerce")
-df[YEAR_COL] = pd.to_numeric(df[YEAR_COL], errors="coerce")
+st.sidebar.header("Filtros")
 
-df[TRANS_COL] = df[TRANS_COL].apply(
-    lambda x: "-" if str(x).strip() == "-" else str(x).strip()
-)
+# Clase
+class_opts = [c for c in sorted(df["Class"].dropna().unique())]
+sel_class = st.sidebar.selectbox("Clase", ["All"] + class_opts)
+if sel_class != "All":
+    df = df[df["Class"] == sel_class]
 
-df = df[df[PRICE_COL] > 0].copy()
+# Tipo de viaje
+travel_opts = [c for c in sorted(df["Type of Travel"].dropna().unique())]
+sel_travel = st.sidebar.selectbox("Tipo de viaje", ["All"] + travel_opts)
+if sel_travel != "All":
+    df = df[df["Type of Travel"] == sel_travel]
 
-# =========================
-# SIDEBAR FILTERS (CASCADA)
-# =========================
-st.sidebar.title("Filtros")
+# Customer Type
+cust_opts = [c for c in sorted(df["Customer Type"].dropna().unique())]
+sel_cust = st.sidebar.selectbox("Tipo de cliente", ["All"] + cust_opts)
+if sel_cust != "All":
+    df = df[df["Customer Type"] == sel_cust]
 
-# -------- BRAND (manda sobre todo)
-brands = df[BRAND_COL].value_counts().head(25).index.tolist()
-selected_brand = st.sidebar.selectbox("Marca", brands)
+# Rango de edad
+age_min, age_max = int(df["Age"].min()), int(df["Age"].max())
+sel_age = st.sidebar.slider("Edad", min_value=age_min, max_value=age_max, value=(age_min, age_max))
+df = df[df["Age"].between(*sel_age)]
 
-df_b = df[df[BRAND_COL] == selected_brand].copy()
+# Rango de distancia de vuelo
+fd_min, fd_max = int(df["Flight Distance"].min()), int(df["Flight Distance"].max())
+sel_fd = st.sidebar.slider("Flight Distance", min_value=fd_min, max_value=fd_max, value=(fd_min, fd_max))
+df = df[df["Flight Distance"].between(*sel_fd)]
 
-# -------- YEAR (slider como antes)
-year_min, year_max = int(df_b[YEAR_COL].min()), int(df_b[YEAR_COL].max())
-year_range = st.sidebar.slider(
-    "Año",
-    min_value=year_min,
-    max_value=year_max,
-    value=(year_min, year_max)
-)
-
-df_y = df_b[df_b[YEAR_COL].between(*year_range)].copy()
-
-# -------- PRICE (slider como antes)
-price_min, price_max = float(df_y[PRICE_COL].min()), float(df_y[PRICE_COL].max())
-price_range = st.sidebar.slider(
-    "Precio",
-    min_value=price_min,
-    max_value=price_max,
-    value=(price_min, price_max)
-)
-
-df_p = df_y[df_y[PRICE_COL].between(*price_range)].copy()
-
-# -------- TRANSMISSION (dropdown)
-trans_opts = sorted(df_p[TRANS_COL].unique().tolist())
-sel_trans = st.sidebar.selectbox("Transmisión", ["All"] + trans_opts)
-
-df_t = df_p if sel_trans == "All" else df_p[df_p[TRANS_COL] == sel_trans]
-
-# -------- EXTERIOR COLOR (dropdown)
-ext_opts = df_t[EXT_COL].value_counts().head(20).index.tolist()
-sel_ext = st.sidebar.selectbox("Color exterior", ["All"] + ext_opts)
-
-df_e = df_t if sel_ext == "All" else df_t[df_t[EXT_COL] == sel_ext]
-
-# -------- INTERIOR COLOR (dropdown)
-int_opts = df_e[INT_COL].value_counts().head(20).index.tolist()
-sel_int = st.sidebar.selectbox("Color interior", ["All"] + int_opts)
-
-df_f = df_e if sel_int == "All" else df_e[df_e[INT_COL] == sel_int]
-
-if df_f.empty:
-    st.warning("⚠️ No hay datos con estos filtros. Amplía rangos o selecciona 'All'.")
+if df.empty:
+    st.warning("⚠️ No hay datos con estos filtros. Ajusta los filtros.")
     st.stop()
 
 # =========================
-# HEADER + KPIs
+# KPIs
 # =========================
-st.title("🚗 Car Price Dashboard")
-
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Marca", selected_brand)
-k2.metric("Registros", f"{len(df_f):,}")
-k3.metric("Precio medio", f"{df_f[PRICE_COL].mean():,.0f}")
-k4.metric("Precio mediano", f"{df_f[PRICE_COL].median():,.0f}")
+st.subheader("KPIs")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Registros", f"{len(df):,}")
+pct = df["is_satisfied"].mean() * 100
+col2.metric("% Satisfechos", f"{pct:.1f}%")
+col3.metric("Edad media", f"{df['Age'].mean():.1f}")
+col4.metric("Dist. vuelo media", f"{df['Flight Distance'].mean():.0f}")
 
 st.divider()
 
 # =========================
-# TABS
+# VISUALIZACIONES
 # =========================
-tab1, tab2, tab3 = st.tabs(["📊 Exploración", "🎨 Colores (media)", "🧾 Datos"])
+tab1, tab2, tab3 = st.tabs(["📊 Resumen", "🔎 Servicios", "🧾 Datos"])
 
-# -------- TAB 1 --------
 with tab1:
-    c1, c2 = st.columns(2)
+    st.subheader("Distribución de satisfacción")
+    sat_counts = df["satisfaction"].value_counts().reset_index()
+    sat_counts.columns = ["satisfaction", "count"]
+    chart = alt.Chart(sat_counts).mark_bar().encode(
+        x=alt.X("satisfaction:N", sort="-y"),
+        y="count:Q",
+        color="satisfaction:N",
+        tooltip=["satisfaction", "count"]
+    )
+    st.altair_chart(chart, use_container_width=True)
 
-    with c1:
-        st.subheader("Distribución del precio")
-        fig, ax = plt.subplots()
-        ax.hist(df_f[PRICE_COL], bins=40)
-        ax.set_xlabel("Price")
-        ax.set_ylabel("Count")
-        st.pyplot(fig)
+    st.subheader("Edad vs Flight Distance (coloreado por satisfacción)")
+    scatter = (
+        alt.Chart(df)
+        .mark_circle(size=60)
+        .encode(
+            x="Age:Q",
+            y="Flight Distance:Q",
+            color=alt.Color("satisfaction:N"),
+            tooltip=["Age", "Flight Distance", "satisfaction"]
+        )
+    )
+    st.altair_chart(scatter.interactive(), use_container_width=True)
 
-    with c2:
-        st.subheader("Año vs Precio")
-        fig, ax = plt.subplots()
-        ax.scatter(df_f[YEAR_COL], df_f[PRICE_COL], alpha=0.4)
-        ax.set_yscale("log")
-        ax.set_xlabel("Model year")
-        ax.set_ylabel("Price (log)")
-        st.pyplot(fig)
-
-    st.subheader("Precio por transmisión")
-    fig, ax = plt.subplots(figsize=(10,4))
-    sns.boxplot(data=df_f, x=TRANS_COL, y=PRICE_COL, ax=ax)
-    ax.set_yscale("log")
-    ax.tick_params(axis="x", rotation=30)
-    st.pyplot(fig)
-
-# -------- TAB 2 --------
 with tab2:
-    st.subheader("Top 5 colores exteriores más caros (media)")
-    top_ext = df_f[EXT_COL].value_counts().head(10).index
-    top5_ext = (
-        df_f[df_f[EXT_COL].isin(top_ext)]
-        .groupby(EXT_COL)[PRICE_COL]
-        .mean()
-        .sort_values(ascending=False)
-        .head(5)
+    st.subheader("Promedio de puntuaciones por servicio")
+    service_cols = [
+        'Inflight wifi service', 'Departure/Arrival time convenient', 'Ease of Online booking',
+        'Gate location', 'Food and drink', 'Online boarding', 'Seat comfort',
+        'Inflight entertainment', 'On-board service', 'Leg room service',
+        'Baggage handling', 'Checkin service', 'Inflight service', 'Cleanliness'
+    ]
+    # Filtrar columnas que existan en el dataset
+    service_cols = [c for c in service_cols if c in df.columns]
+    svc_mean = df[service_cols].mean().reset_index()
+    svc_mean.columns = ["service", "mean"]
+    svc_chart = alt.Chart(svc_mean).mark_bar().encode(
+        x=alt.X("mean:Q"),
+        y=alt.Y("service:N", sort="-x"),
+        tooltip=["service", "mean"]
     )
+    st.altair_chart(svc_chart, use_container_width=True)
 
-    fig, ax = plt.subplots(figsize=(8,4))
-    sns.barplot(x=top5_ext.index, y=top5_ext.values, ax=ax)
-    ax.set_xlabel("Exterior color")
-    ax.set_ylabel("Mean price")
-    ax.tick_params(axis="x", rotation=30)
-    st.pyplot(fig)
-
-    st.subheader("Top 5 colores interiores más caros (media)")
-    top_int = df_f[INT_COL].value_counts().head(10).index
-    top5_int = (
-        df_f[df_f[INT_COL].isin(top_int)]
-        .groupby(INT_COL)[PRICE_COL]
-        .mean()
-        .sort_values(ascending=False)
-        .head(5)
+    st.subheader("Satisfacción por Clase")
+    cls = df.groupby("Class")["is_satisfied"].mean().reset_index()
+    cls["pct_satisfied"] = cls["is_satisfied"] * 100
+    cls_chart = alt.Chart(cls).mark_bar().encode(
+        x=alt.X("Class:N"),
+        y=alt.Y("pct_satisfied:Q"),
+        color=alt.Color("Class:N"),
+        tooltip=["Class", "pct_satisfied"]
     )
+    st.altair_chart(cls_chart, use_container_width=True)
 
-    fig, ax = plt.subplots(figsize=(8,4))
-    sns.barplot(x=top5_int.index, y=top5_int.values, ax=ax)
-    ax.set_xlabel("Interior color")
-    ax.set_ylabel("Mean price")
-    ax.tick_params(axis="x", rotation=30)
-    st.pyplot(fig)
-
-# -------- TAB 3 --------
 with tab3:
     st.subheader("Dataset filtrado")
-    st.dataframe(df_f, use_container_width=True)
-
-    st.download_button(
-        "⬇️ Descargar CSV filtrado",
-        df_f.to_csv(index=False).encode("utf-8"),
-        file_name=f"cars_filtered_{selected_brand}.csv",
-        mime="text/csv"
-    )
+    st.dataframe(df.reset_index(drop=True), use_container_width=True)
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button("⬇️ Descargar CSV filtrado", csv, file_name="passenger_satisfaction_filtered.csv", mime="text/csv")
