@@ -53,20 +53,15 @@ satisfaction_enc = LabelEncoder().fit(sorted(df['satisfaction'].dropna().unique(
 
 # --- FORMULARIO DE PREDICCIÓN ---
 with st.form("prediction_form"):
-    st.header("Ingrese los datos del vehículo")
-
-    gender = st.number_input("Indique Genero", min_value=1990, max_value=2025, step=1)
-    client = st.number_input("Tipo de cliente", min_value=0, step=1000)
-    travel = st.number_input("Tipo de viaje", min_value=0, max_value=16, step=1)
-    class_travel = st.number_input("Clase", min_value=0, step=10)
-    satisfaction = st.number_input("Tipo de satisfaccion", min_value=0.0, max_value=20.0, step=0.1)
-
-    gender = st.selectbox("Genero", gender_enc.classes_)
-    client = st.selectbox("Tipo de cliente", cust_enc.classes_)
-    travel = st.selectbox("Tipo de viaje", travel_enc.classes_)
-    class_travel = st.selectbox("Tipo de clase", class_enc.classes_)
-    satisfaction = st.selectbox("Grado de satisfaccion", satisfaction_enc.classes_)
-    submit_button = st.form_submit_button("Predecir Precio")
+    st.title("📊 Predicción de Satisfacción del Cliente")
+    st.markdown("Ingrese los datos del cliente para determinar su nivel de satisfacción.")
+    st.header("Ingrese los datos")
+    gender = st.selectbox("Indique Genero",("Masculino", "Femenino",))
+    client = st.selectbox("Tipo de cliente", ("Cliente leal", "Cliente desleal"))
+    travel = st.selectbox("Tipo de viaje", ("Viaje personal", "Viaje de negocios"))
+    class_travel = st.selectbox("Tipo de Clase", ("Eco Plus", "Business", "Eco"))
+    satisfaction = st.selectbox("Tipo de satisfaccion", ("Satisfecho", "Neutral"))
+    submit_button = st.form_submit_button("Predecir")
 
 if submit_button:
     try:
@@ -108,7 +103,7 @@ if submit_button:
         prediccion = pipeline.predict(input_data)
         prediccion_final = post.round_post(prediccion)[0]
 
-        st.success(f"Precio predicho: ${prediccion_final:,.2f}")
+        st.success(f"Este cliente esta...: ${prediccion_final:,.2f}")
 
         with st.expander("Detalles de la predicción"):
             st.write(f"**Genero:** {gender}")
