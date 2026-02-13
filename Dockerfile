@@ -1,20 +1,18 @@
-# Imagen base de Python
+# 1. Imagen base
 FROM python:3.11-slim
 
-# Establecer directorio de trabajo dentro del contenedor
+# 2. Directorio de trabajo
 WORKDIR /app
 
-# Copiar el archivo de dependencias
+# 3. Instalación de dependencias (se hace antes para aprovechar el cache)
 COPY requirements.txt .
-
-# Instalar las dependencias
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar el código de la aplicación
-COPY main.py .
+# 4. Copiar todo el proyecto
+COPY . .
 
-# Exponer el puerto 8501 (puerto por defecto de Streamlit)
+# 5. Puerto
 EXPOSE 8501
 
-# Comando para ejecutar la aplicación
-CMD ["streamlit", "run", "main.py", "--server.address=0.0.0.0"]
+# 6. Ejecución
+CMD ["streamlit", "run", "main.py", "--server.port=8501", "--server.address=0.0.0.0"]
